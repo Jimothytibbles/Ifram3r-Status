@@ -1,0 +1,10 @@
+{
+  "down": ["nebula"],
+  "messages": {
+    "truffled": "Site down / Not working",
+    "music": "Unavailable",
+    "nebula": "Not working",
+    "games": "Maintenance",
+    "proxy": "Site down / Not working"
+  }
+}
