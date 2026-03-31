@@ -1,9 +1,9 @@
 {
-  "down": [],
+  "down": ["nebula"],
   "messages": {
     "truffled": "Site down / Not working",
     "music": "Unavailable",
-    "nebula": "Not working",
+    "nebula": "Not Working",
     "games": "Maintenance",
     "proxy": "Site down / Not working"
   }
