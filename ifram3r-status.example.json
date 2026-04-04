@@ -3,8 +3,9 @@
   "messages": {
     "truffled": "Site down / Not working",
     "music": "Unavailable",
-    "nebula": "Not Working",
+    "nebula": "Not working",
     "games": "Maintenance",
-    "proxy": "Securly Issue"
-  }
+    "proxy": "Securly blocking access"
+  },
+  "ifram3rHtml": "https://raw.githubusercontent.com/Jimothytibbles/Ifram3r-Status/main/Ifram3r.html"
 }
