@@ -1,9 +1,11 @@
 <!DOCTYPE html>
+<!-- Ifram3r — host this file in https://github.com/Jimothytibbles/Ifram3r-Status (raw URL used for in-app updates). Bump ifram3r-build when you publish. -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Ifram3r — embedded apps and local music">
+    <meta name="ifram3r-build" content="202604033">
     <title>Ifram3r</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <style>
@@ -524,6 +526,71 @@ footer.page-foot {
     margin-top: 8px;
 }
 
+.update-banner {
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 12px 16px;
+    background: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.4);
+    border-radius: var(--radius);
+    box-shadow: var(--glow);
+}
+
+.update-banner[hidden] {
+    display: none !important;
+}
+
+.update-banner-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.45;
+}
+
+.update-banner-inner i {
+    margin-right: 6px;
+    color: var(--accent);
+}
+
+.update-banner-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.footer-actions {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+}
+
+.footer-actions button {
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 0, 0, 0.45);
+    background: transparent;
+    color: rgba(255, 100, 100, 0.95);
+    transition: background 0.2s, color 0.2s;
+}
+
+.footer-actions button:hover {
+    background: rgba(255, 0, 0, 0.12);
+    color: var(--text);
+}
+
 /* —— Inline music app —— */
 .music-app {
     display: none;
@@ -944,6 +1011,15 @@ audio#player-audio {
 </head>
 <body>
     <div class="app">
+        <div class="update-banner" id="update-banner" hidden role="status">
+            <div class="update-banner-inner">
+                <span id="update-banner-text"><i class="fas fa-cloud-download-alt" aria-hidden="true"></i> A newer Ifram3r is available (<span id="update-build-label"></span>).</span>
+                <span class="update-banner-actions">
+                    <button type="button" class="icon-btn" id="update-apply-btn">Apply update</button>
+                    <button type="button" class="icon-btn ghost" id="update-dismiss-btn">Not now</button>
+                </span>
+            </div>
+        </div>
         <header class="hero">
             <h1>Ifram3r</h1>
             <p>Pick a source below and it loads in the preview. Use fullscreen for the full canvas; open in new tab if a site blocks embedding.</p>
@@ -1106,7 +1182,7 @@ audio#player-audio {
                                     <input type="range" id="volume" min="0" max="100" value="100" aria-label="Volume">
                                     <i class="fas fa-volume-up" style="color:var(--accent);font-size:0.75rem"></i>
                                 </div>
-                                <p class="music-hint">Playback queue follows the track you select; library order is used for &ldquo;Play all&rdquo; on a playlist.</p>
+                                <p class="music-hint">Shuffle randomizes the full queue order; repeat all reshuffles when the list ends. Prev/next follow that order. Picking a track rebuilds the queue from the library or playlist.</p>
                             </div>
                         </div>
                     </div>
@@ -1116,6 +1192,9 @@ audio#player-audio {
 
         <footer class="page-foot">
           Ifram3r refetches status on load and every 2 minutes. GitHub raw files can lag a few minutes after you push.
+          <div class="footer-actions">
+            <button type="button" id="check-update-btn">Check for Ifram3r update</button>
+          </div>
         </footer>
     </div>
 
@@ -1137,12 +1216,19 @@ audio#player-audio {
     const loadingEl = document.getElementById('iframe-loading');
     const emptyHint = document.getElementById('empty-hint');
     const musicApp = document.getElementById('music-app');
+    const updateBanner = document.getElementById('update-banner');
+    const updateBuildLabel = document.getElementById('update-build-label');
+    const updateApplyBtn = document.getElementById('update-apply-btn');
+    const updateDismissBtn = document.getElementById('update-dismiss-btn');
+    const checkUpdateBtn = document.getElementById('check-update-btn');
 
     let currentUrl = 'about:blank';
     let musicMode = false;
 
-    /** Status file: https://github.com/Jimothytibbles/Ifram3r-Status — keys: truffled, music, nebula, games, proxy */
+    /** Status file: https://github.com/Jimothytibbles/Ifram3r-Status — keys: truffled, music, nebula, games, proxy; optional ifram3rHtml URL */
     const STATUS_JSON_URL = 'https://raw.githubusercontent.com/Jimothytibbles/Ifram3r-Status/main/ifram3r-status.example.json';
+    /** Raw Ifram3r.html in the same repo (see meta ifram3r-build). Overridable via ifram3rHtml in status JSON. */
+    let REMOTE_IFRAM3R_URL = 'https://raw.githubusercontent.com/Jimothytibbles/Ifram3r-Status/main/Ifram3r.html';
 
     function applySiteStatus(data) {
         const down = Array.isArray(data.down) ? data.down : [];
@@ -1170,6 +1256,10 @@ audio#player-audio {
                 if (overlay) overlay.remove();
             }
         });
+        if (data.ifram3rHtml && typeof data.ifram3rHtml === 'string') {
+            const uh = data.ifram3rHtml.trim();
+            if (uh) REMOTE_IFRAM3R_URL = uh;
+        }
     }
 
     function refreshSiteStatus() {
@@ -1181,8 +1271,13 @@ audio#player-audio {
                 if (!r.ok) throw new Error('status');
                 return r.json();
             })
-            .then(applySiteStatus)
-            .catch(function () {});
+            .then(function (data) {
+                applySiteStatus(data);
+                checkForIfram3rUpdate(false);
+            })
+            .catch(function () {
+                checkForIfram3rUpdate(false);
+            });
     }
 
     function setActiveButton(active) {
@@ -1324,6 +1419,109 @@ audio#player-audio {
     document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
     document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
 
+    let pendingRemoteBuild = '';
+
+    function getLocalBuild() {
+        const m = document.querySelector('meta[name="ifram3r-build"]');
+        return m && m.getAttribute('content') ? String(m.getAttribute('content')).trim() : '0';
+    }
+
+    function parseBuildFromHtml(html) {
+        if (!html) return '';
+        let m = html.match(/<meta\s+name=["']ifram3r-build["']\s+content=["']([^"']+)["']/i);
+        if (!m) m = html.match(/<meta\s+content=["']([^"']+)["']\s+name=["']ifram3r-build["']/i);
+        return m && m[1] ? m[1].trim() : '';
+    }
+
+    function buildToNumber(b) {
+        const n = parseInt(String(b).replace(/\D/g, ''), 10);
+        return isFinite(n) ? n : 0;
+    }
+
+    function isRemoteNewer(remoteB, localB) {
+        return buildToNumber(remoteB) > buildToNumber(localB);
+    }
+
+    function hideUpdateBanner() {
+        updateBanner.hidden = true;
+    }
+
+    function showUpdateBanner(remoteB) {
+        pendingRemoteBuild = remoteB;
+        updateBuildLabel.textContent = remoteB;
+        updateBanner.hidden = false;
+    }
+
+    function checkForIfram3rUpdate(forceAlert) {
+        const localB = getLocalBuild();
+        const url = (REMOTE_IFRAM3R_URL || '').trim();
+        if (!url) {
+            if (forceAlert) window.alert('No remote Ifram3r URL configured.');
+            return;
+        }
+        let dismiss = null;
+        try {
+            dismiss = sessionStorage.getItem('ifram3r_skip_build');
+        } catch (e) {}
+        const sep = url.indexOf('?') >= 0 ? '&' : '?';
+        fetch(url + sep + 't=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('fetch');
+                return r.text();
+            })
+            .then(function (html) {
+                const remoteB = parseBuildFromHtml(html);
+                if (!remoteB) {
+                    if (forceAlert) window.alert('Remote file has no ifram3r-build meta tag.');
+                    return;
+                }
+                if (!isRemoteNewer(remoteB, localB)) {
+                    if (forceAlert) window.alert('You are on the latest build (' + localB + ').');
+                    hideUpdateBanner();
+                    return;
+                }
+                if (!forceAlert && dismiss === remoteB) return;
+                showUpdateBanner(remoteB);
+            })
+            .catch(function () {
+                if (forceAlert) {
+                    window.alert('Could not fetch remote Ifram3r. If you opened this file from disk, your browser may block requests—try hosting the page or allow network access.');
+                }
+            });
+    }
+
+    updateDismissBtn.addEventListener('click', function () {
+        try {
+            if (pendingRemoteBuild) sessionStorage.setItem('ifram3r_skip_build', pendingRemoteBuild);
+        } catch (e) {}
+        hideUpdateBanner();
+    });
+
+    updateApplyBtn.addEventListener('click', function () {
+        const url = (REMOTE_IFRAM3R_URL || '').trim();
+        if (!url) return;
+        updateApplyBtn.disabled = true;
+        const sep = url.indexOf('?') >= 0 ? '&' : '?';
+        fetch(url + sep + 't=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('fetch');
+                return r.text();
+            })
+            .then(function (html) {
+                document.open();
+                document.write(html);
+                document.close();
+            })
+            .catch(function () {
+                window.alert('Update failed to download. Confirm Ifram3r.html exists at your raw GitHub URL.');
+                updateApplyBtn.disabled = false;
+            });
+    });
+
+    checkUpdateBtn.addEventListener('click', function () {
+        checkForIfram3rUpdate(true);
+    });
+
     refreshEmptyState();
     refreshSiteStatus();
     setInterval(refreshSiteStatus, 120000);
@@ -1368,6 +1566,7 @@ audio#player-audio {
     let allPlaylists = [];
     let currentPlId = null;
     let queueIds = [];
+    let orderIds = [];
     let queueIndex = -1;
     let currentBlobUrl = null;
     let repeatMode = 0;
@@ -1454,6 +1653,22 @@ audio#player-audio {
         return m + ':' + (s < 10 ? '0' : '') + s;
     }
 
+    function shuffleArray(ids) {
+        const a = ids.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const t = a[i];
+            a[i] = a[j];
+            a[j] = t;
+        }
+        return a;
+    }
+
+    function getCurrentTrackId() {
+        if (!orderIds.length || queueIndex < 0 || queueIndex >= orderIds.length) return null;
+        return orderIds[queueIndex];
+    }
+
     function showView(which) {
         viewHome.hidden = which !== 'home';
         viewLibrary.hidden = which !== 'library';
@@ -1511,7 +1726,7 @@ audio#player-audio {
             if (q && name.toLowerCase().indexOf(q) === -1) return;
             const li = document.createElement('li');
             li.dataset.id = tr.id;
-            if (queueIds[queueIndex] === tr.id) li.classList.add('active');
+            if (getCurrentTrackId() === tr.id) li.classList.add('active');
             li.innerHTML = '<span class="ti">' + escapeHtml(name) + '</span><span class="t-actions">' +
                 '<button type="button" data-a="play" title="Play"><i class="fas fa-play"></i></button>' +
                 '<button type="button" data-a="addpl" title="Add to playlist"><i class="fas fa-list"></i></button>' +
@@ -1547,7 +1762,7 @@ audio#player-audio {
             if (!tr) return;
             const li = document.createElement('li');
             li.dataset.id = tr.id;
-            if (queueIds[queueIndex] === tr.id) li.classList.add('active');
+            if (getCurrentTrackId() === tr.id) li.classList.add('active');
             const name = tr.name.replace(/\.mp3$/i, '');
             li.innerHTML = '<span class="ti">' + escapeHtml(name) + '</span><span class="t-actions">' +
                 '<button type="button" data-a="play" title="Play"><i class="fas fa-play"></i></button>' +
@@ -1614,6 +1829,7 @@ audio#player-audio {
                 audio.pause();
                 audio.src = '';
                 queueIds = [];
+                orderIds = [];
                 queueIndex = -1;
                 npTitle.textContent = 'Nothing playing';
                 npSub.textContent = 'Add MP3s to get started';
@@ -1634,25 +1850,38 @@ audio#player-audio {
         }
     }
 
-    function playTrackId(id, queue) {
+    function loadTrackBlob(id) {
         const tr = trackById(id);
         if (!tr) return;
-        queueIds = queue.slice();
-        queueIndex = queueIds.indexOf(id);
-        if (queueIndex < 0) {
-            queueIds = [id];
-            queueIndex = 0;
-        }
         revokeCurrent();
         currentBlobUrl = URL.createObjectURL(tr.blob);
         audio.src = currentBlobUrl;
         npTitle.textContent = tr.name.replace(/\.mp3$/i, '');
-        npSub.textContent = 'Local MP3';
+        npSub.textContent = shuffleOn ? 'Local MP3 · shuffle' : 'Local MP3';
         audio.play().catch(function () {});
         renderLibrary();
         if (!viewPlDetail.hidden && currentPlId) openPlaylistDetail(currentPlId);
         updatePlayBtn();
         updateMediaSession(tr);
+    }
+
+    function playTrackId(id, baseQueue) {
+        const q = baseQueue.slice();
+        queueIds = q.length ? q : [id];
+        if (shuffleOn && queueIds.length > 1) {
+            orderIds = shuffleArray(queueIds);
+            queueIndex = orderIds.indexOf(id);
+            if (queueIndex < 0) queueIndex = 0;
+        } else {
+            orderIds = queueIds.slice();
+            queueIndex = orderIds.indexOf(id);
+            if (queueIndex < 0) {
+                queueIds = [id];
+                orderIds = [id];
+                queueIndex = 0;
+            }
+        }
+        loadTrackBlob(id);
     }
 
     function updateMediaSession(tr) {
@@ -1671,38 +1900,41 @@ audio#player-audio {
     }
 
     function playNext() {
-        if (!queueIds.length) return;
+        if (!orderIds.length) return;
         if (repeatMode === 2) {
             audio.currentTime = 0;
             audio.play().catch(function () {});
             return;
         }
         let next = queueIndex + 1;
-        if (next >= queueIds.length) {
-            if (repeatMode === 1) next = 0;
-            else {
+        if (next >= orderIds.length) {
+            if (repeatMode === 1) {
+                if (shuffleOn && queueIds.length > 1) {
+                    orderIds = shuffleArray(queueIds.slice());
+                }
+                next = 0;
+            } else {
                 audio.pause();
                 return;
             }
         }
-        if (shuffleOn && queueIds.length > 1) {
-            let n = queueIndex;
-            while (n === queueIndex) n = Math.floor(Math.random() * queueIds.length);
-            playTrackId(queueIds[n], queueIds);
-            return;
-        }
-        playTrackId(queueIds[next], queueIds);
+        queueIndex = next;
+        loadTrackBlob(orderIds[queueIndex]);
     }
 
     function playPrev() {
-        if (!queueIds.length) return;
+        if (!orderIds.length) return;
         if (audio.currentTime > 3) {
             audio.currentTime = 0;
             return;
         }
         let prev = queueIndex - 1;
-        if (prev < 0) prev = queueIds.length - 1;
-        playTrackId(queueIds[prev], queueIds);
+        if (prev < 0) {
+            if (repeatMode === 1) prev = orderIds.length - 1;
+            else return;
+        }
+        queueIndex = prev;
+        loadTrackBlob(orderIds[queueIndex]);
     }
 
     function updatePlayBtn() {
@@ -1809,13 +2041,37 @@ audio#player-audio {
     btnNext.addEventListener('click', playNext);
     btnPrev.addEventListener('click', playPrev);
     btnShuffle.addEventListener('click', function () {
+        const cur = getCurrentTrackId();
         shuffleOn = !shuffleOn;
         btnShuffle.setAttribute('aria-pressed', shuffleOn ? 'true' : 'false');
+        if (cur && queueIds.length) {
+            if (shuffleOn && queueIds.length > 1) {
+                orderIds = shuffleArray(queueIds.slice());
+                queueIndex = orderIds.indexOf(cur);
+                if (queueIndex < 0) queueIndex = 0;
+            } else {
+                orderIds = queueIds.slice();
+                queueIndex = orderIds.indexOf(cur);
+                if (queueIndex < 0) queueIndex = 0;
+            }
+            renderLibrary();
+            if (!viewPlDetail.hidden && currentPlId) openPlaylistDetail(currentPlId);
+            const tr = trackById(cur);
+            if (tr) npSub.textContent = shuffleOn ? 'Local MP3 · shuffle' : 'Local MP3';
+        }
     });
+
+    function updateRepeatUi() {
+        const labels = ['Repeat off', 'Repeat all', 'Repeat one'];
+        btnRepeat.setAttribute('aria-pressed', repeatMode !== 0 ? 'true' : 'false');
+        btnRepeat.title = labels[repeatMode];
+    }
+
     btnRepeat.addEventListener('click', function () {
         repeatMode = (repeatMode + 1) % 3;
-        btnRepeat.setAttribute('aria-pressed', repeatMode !== 0 ? 'true' : 'false');
+        updateRepeatUi();
     });
+    updateRepeatUi();
 
     audio.addEventListener('play', updatePlayBtn);
     audio.addEventListener('pause', updatePlayBtn);
