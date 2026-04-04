@@ -1,5 +1,5 @@
 {
-  "down": ["nebula", "proxy"],
+  "down": ["proxy"],
   "messages": {
     "truffled": "Site down / Not working",
     "music": "Unavailable",
